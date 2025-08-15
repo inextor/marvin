@@ -6,6 +6,7 @@ let currentMcpStatus = 'Disconnected';
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received in background script:', request);
   if (request.action === "start") {
+    console.log('Action is start.');
     if (!port) {
       console.log('Attempting to connect to native host...');
       port = chrome.runtime.connectNative('com.my.native_host');
@@ -30,7 +31,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else if (msg.action === 'mcpStatus') {
           console.log('MCP Status:', msg.status);
           currentMcpStatus = msg.status;
-          chrome.runtime.sendMessage({ action: 'mcpStatus', status: msg.status });
+          chrome.runtime.sendMessage({ action: 'mcpStatus', status: currentMcpStatus });
         } else if (msg.action === 'response') {
           chrome.runtime.sendMessage({ action: 'response', message: msg.text });
         }
