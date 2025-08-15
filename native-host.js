@@ -1,46 +1,111 @@
 #!/usr/bin/env node
 
-const { exec } = require('child_process');
+const net = require('net');
+
+let extensionPort;
+let mcpSocket;
+
+// --- MCP Server Implementation ---
+
+const server = net.createServer((socket) => {
+  mcpSocket = socket;
+
+  mcpSocket.on('data', (data) => {
+    const messages = data.toString().split('\n').filter(Boolean);
+    for (const message of messages) {
+      try {
+        const mcpMessage = JSON.parse(message);
+        handleMcpMessage(mcpMessage);
+      } catch (e) {
+        sendMcpError('Invalid JSON');
+      }
+    }
+  });
+
+  mcpSocket.on('close', () => {
+    mcpSocket = null;
+  });
+
+  mcpSocket.on('error', (err) => {
+    // In a real implementation, you would want to log this
+  });
+});
+
+server.listen(8080, '127.0.0.1');
+
+function handleMcpMessage(message) {
+  if (message.jsonrpc !== '2.0') {
+    sendMcpError('Invalid JSON-RPC version');
+    return;
+  }
+
+  if (message.method) {
+    // This is a request from gemini-cli
+    switch (message.method) {
+      case 'mcp.echo':
+        sendMcpResponse(message.id, message.params);
+        break;
+      default:
+        sendMcpError(`Method not found: ${message.method}`, message.id);
+    }
+  } else if (message.result) {
+    // This is a response from gemini-cli, forward to extension
+    if (extensionPort) {
+      const msg = {
+        text: message.result
+      };
+      const buffer = Buffer.from(JSON.stringify(msg));
+      const header = Buffer.alloc(4);
+      header.writeUInt32LE(buffer.length, 0);
+      extensionPort.stdout.write(header);
+      extensionPort.stdout.write(buffer);
+    }
+  }
+}
+
+function sendMcpResponse(id, result) {
+  const response = {
+    jsonrpc: '2.0',
+    id: id,
+    result: result
+  };
+  if (mcpSocket) {
+    mcpSocket.write(JSON.stringify(response) + '\n');
+  }
+}
+
+function sendMcpError(errorMessage, id = null) {
+  const response = {
+    jsonrpc: '2.0',
+    id: id,
+    error: {
+      code: -32600,
+      message: errorMessage
+    }
+  };
+  if (mcpSocket) {
+    mcpSocket.write(JSON.stringify(response) + '\n');
+  }
+}
+
+// --- Chrome Extension Communication ---
 
 process.stdin.on('data', (chunk) => {
+  if (!extensionPort) {
+    extensionPort = process;
+  }
+
   const length = chunk.readUInt32LE(0);
   const message = chunk.slice(4).toString();
   const parsedMessage = JSON.parse(message);
 
-  exec(`gemini -p "${parsedMessage.text}"`, (error, stdout, stderr) => {
-    if (error) {
-      const response = {
-        text: `Error: ${error.message}`
-      };
-      const responseBuffer = Buffer.from(JSON.stringify(response));
-      const lengthBuffer = Buffer.alloc(4);
-      lengthBuffer.writeUInt32LE(responseBuffer.length, 0);
-
-      process.stdout.write(lengthBuffer);
-      process.stdout.write(responseBuffer);
-      return;
-    }
-    if (stderr) {
-      const response = {
-        text: `Stderr: ${stderr}`
-      };
-      const responseBuffer = Buffer.from(JSON.stringify(response));
-      const lengthBuffer = Buffer.alloc(4);
-      lengthBuffer.writeUInt32LE(responseBuffer.length, 0);
-
-      process.stdout.write(lengthBuffer);
-      process.stdout.write(responseBuffer);
-      return;
-    }
-
-    const response = {
-      text: stdout
+  // Forward message from extension to gemini-cli as a notification
+  if (mcpSocket) {
+    const notification = {
+      jsonrpc: '2.0',
+      method: 'extension.message',
+      params: parsedMessage
     };
-    const responseBuffer = Buffer.from(JSON.stringify(response));
-    const lengthBuffer = Buffer.alloc(4);
-    lengthBuffer.writeUInt32LE(responseBuffer.length, 0);
-
-    process.stdout.write(lengthBuffer);
-    process.stdout.write(responseBuffer);
-  });
+    mcpSocket.write(JSON.stringify(notification) + '\n');
+  }
 });

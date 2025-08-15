@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "response") {
-      document.getElementById('response').innerHTML = request.message;
+      document.getElementById('response').innerHTML = request.message.text;
     }
   });
 });
