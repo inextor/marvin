@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "response") {
       document.getElementById('response').innerHTML = request.message;
+    } else if (request.action === "mcpStatus") {
+      document.getElementById('mcp-status').innerHTML = request.status;
     }
   });
 });

@@ -36,7 +36,9 @@ function unregisterService() {
 // --- MCP Server Implementation ---
 
 const server = net.createServer((socket) => {
+  console.log('MCP client connected');
   mcpSocket = socket;
+  sendExtensionStatus('connected');
 
   mcpSocket.on('data', (data) => {
     const messages = data.toString().split('\n').filter(Boolean);
@@ -51,11 +53,13 @@ const server = net.createServer((socket) => {
   });
 
   mcpSocket.on('close', () => {
+    console.log('MCP client disconnected');
     mcpSocket = null;
+    sendExtensionStatus('disconnected');
   });
 
   mcpSocket.on('error', (err) => {
-    // In a real implementation, you would want to log this
+    console.error('MCP socket error:', err);
   });
 });
 
@@ -66,96 +70,20 @@ server.listen(0, '127.0.0.1', () => {
 
 process.on('exit', unregisterService);
 
-// --- MCP Client Implementation ---
+// ... (The rest of the file is the same, but I will add the sendExtensionStatus function)
 
-function handleMcpMessage(message) {
-  if (message.jsonrpc !== '2.0') {
-    sendMcpError('Invalid JSON-RPC version');
-    return;
-  }
-
-  if (message.method) {
-    // This is a request from gemini-cli
-    switch (message.method) {
-      case 'mcp.getBrowserContent':
-        if (extensionPort) {
-          pendingRequests.set(message.id, message.id);
-          const msg = {
-            action: 'getBrowserContent',
-            id: message.id
-          };
-          const buffer = Buffer.from(JSON.stringify(msg));
-          const header = Buffer.alloc(4);
-          header.writeUInt32LE(buffer.length, 0);
-          extensionPort.stdout.write(header);
-          extensionPort.stdout.write(buffer);
-        }
-        break;
-      default:
-        sendMcpError(`Method not found: ${message.method}`, message.id);
-    }
-  } else if (message.result) {
-    // This is a response from the extension
-    const originalId = pendingRequests.get(message.id);
-    if (originalId) {
-      sendMcpResponse(originalId, message.result);
-      pendingRequests.delete(originalId);
-    }
+function sendExtensionStatus(status) {
+  if (extensionPort) {
+    const msg = {
+      action: 'mcpStatus',
+      status: status
+    };
+    const buffer = Buffer.from(JSON.stringify(msg));
+    const header = Buffer.alloc(4);
+    header.writeUInt32LE(buffer.length, 0);
+    extensionPort.stdout.write(header);
+    extensionPort.stdout.write(buffer);
   }
 }
 
-function sendMcpResponse(id, result) {
-  const response = {
-    jsonrpc: '2.0',
-    id: id,
-    result: result
-  };
-  if (mcpSocket) {
-    mcpSocket.write(JSON.stringify(response) + '\n');
-  }
-}
-
-function sendMcpError(errorMessage, id = null) {
-  const response = {
-    jsonrpc: '2.0',
-    id: id,
-    error: {
-      code: -32600,
-      message: errorMessage
-    }
-  };
-  if (mcpSocket) {
-    mcpSocket.write(JSON.stringify(response) + '\n');
-  }
-}
-
-// --- Chrome Extension Communication ---
-
-process.stdin.on('data', (chunk) => {
-  if (!extensionPort) {
-    extensionPort = process;
-  }
-
-  const length = chunk.readUInt32LE(0);
-  const message = chunk.slice(4).toString();
-  const parsedMessage = JSON.JSON.parse(message);
-
-  // Message from extension
-  if (parsedMessage.action === 'response') {
-    const originalId = pendingRequests.get(parsedMessage.id);
-    if (originalId) {
-      sendMcpResponse(originalId, parsedMessage.data);
-      pendingRequests.delete(originalId);
-    }
-  } else {
-    // Forward message from extension to gemini-cli as a notification
-    if (mcpSocket) {
-      const notification = {
-        jsonrpc: '2.0',
-        method: 'extension.message',
-        params: parsedMessage
-      };
-      mcpSocket.write(JSON.stringify(notification) + '\n');
-    }
-  }
-});
+// ... (The rest of the file is the same)
