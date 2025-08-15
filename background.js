@@ -24,6 +24,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else if (msg.action === 'mcpStatus') {
           console.log('MCP Status:', msg.status);
           chrome.runtime.sendMessage({ action: 'mcpStatus', status: msg.status });
+        } else if (msg.action === 'response') {
+          chrome.runtime.sendMessage({ action: 'response', message: msg.text });
         }
       });
 
