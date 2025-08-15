@@ -1,3 +1,5 @@
+console.log('Background script loaded');
+
 let port;
 let currentMcpStatus = 'Disconnected';
 
