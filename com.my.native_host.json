@@ -1,0 +1,9 @@
+{
+  "name": "com.my.native_host",
+  "description": "Chrome Native Messaging API Example Host 2",
+  "path": "/home/nextor/Projects/MarvinExtension/native-host.js",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://pdldfnckgdlcniaelobmlgblngkoiloc/"
+  ]
+}
