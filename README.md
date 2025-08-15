@@ -16,7 +16,16 @@ There are two main communication channels in this project:
 1.  **Extension to Native Host:** The Chrome extension initiates a persistent connection to the `native-host.js` script. This is done when you click the "Start MCP Connection" button in the popup.
 2.  **MCP Client to Native Host:** The `native-host.js`, once started by the extension, creates a TCP server and listens for incoming connections from other applications (like a `gemini-cli`). These applications are responsible for initiating their own connections to the native host.
 
-Here is a breakdown of the components:
+## Lifecycle of the MCP Connection
+
+It is important to understand that the `native-host.js` script is not always running. Its lifecycle is tied to the Chrome extension.
+
+1.  **Starting the Native Host:** The `native-host.js` process is started by the Chrome extension when you click the "Start MCP Connection" button in the popup.
+2.  **Starting the MCP Server:** Once the native host is running, it starts the TCP server and begins listening for connections from MCP clients.
+3.  **Connecting `gemini-cli`:** At this point, a `gemini-cli` can discover the service and connect to it.
+4.  **Stopping the Native Host:** The `native-host.js` process will exit when the connection from the extension is closed (e.g., when you close the browser).
+
+This means that you must start the MCP connection from the extension's popup before a `gemini-cli` can connect.
 
 ## How to Discover Available MCP Services
 
