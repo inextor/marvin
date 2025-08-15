@@ -135,6 +135,7 @@ function sendMcpError(errorMessage, id = null) {
 }
 
 function sendExtensionStatus(status) {
+  console.log('Sending extension status:', status);
   if (extensionPort) {
     const msg = {
       action: 'mcpStatus',

@@ -15,4 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('mcp-status').innerHTML = request.status;
     }
   });
+
+  // Request status when popup loads
+  chrome.runtime.sendMessage({ action: 'requestStatus' });
 });

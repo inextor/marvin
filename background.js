@@ -1,4 +1,5 @@
 let port;
+let currentMcpStatus = 'Disconnected';
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "start") {
@@ -23,6 +24,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           });
         } else if (msg.action === 'mcpStatus') {
           console.log('MCP Status:', msg.status);
+          currentMcpStatus = msg.status;
           chrome.runtime.sendMessage({ action: 'mcpStatus', status: msg.status });
         } else if (msg.action === 'response') {
           chrome.runtime.sendMessage({ action: 'response', message: msg.text });
@@ -31,7 +33,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       port.onDisconnect.addListener(() => {
         port = null;
+        currentMcpStatus = 'Disconnected';
+        chrome.runtime.sendMessage({ action: 'mcpStatus', status: currentMcpStatus });
       });
     }
+  } else if (request.action === 'requestStatus') {
+    chrome.runtime.sendMessage({ action: 'mcpStatus', status: currentMcpStatus });
   }
 });
