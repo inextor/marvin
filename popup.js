@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('start').addEventListener('click', function() {
+    console.log('Start MCP Connection button clicked');
     chrome.runtime.sendMessage({ action: "start" });
   });
 
