@@ -43,7 +43,16 @@ function handleMcpMessage(message) {
     // This is a request from gemini-cli
     switch (message.method) {
       case 'mcp.echo':
-        sendMcpResponse(message.id, message.params);
+        if (extensionPort) {
+          const msg = {
+            text: message.params
+          };
+          const buffer = Buffer.from(JSON.stringify(msg));
+          const header = Buffer.alloc(4);
+          header.writeUInt32LE(buffer.length, 0);
+          extensionPort.stdout.write(header);
+          extensionPort.stdout.write(buffer);
+        }
         break;
       default:
         sendMcpError(`Method not found: ${message.method}`, message.id);
