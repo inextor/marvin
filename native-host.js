@@ -1,9 +1,37 @@
 #!/usr/bin/env node
 
 const net = require('net');
+const fs = require('fs');
+const path = require('path');
+
+const MCP_DIR = path.join(process.env.HOME, '.mcp', 'services');
+const SERVICE_NAME = 'com.my.native_host';
+const SERVICE_FILE = path.join(MCP_DIR, `${SERVICE_NAME}.json`);
 
 let extensionPort;
 let mcpSocket;
+const pendingRequests = new Map();
+
+// --- Service Discovery ---
+
+function registerService(port) {
+  if (!fs.existsSync(MCP_DIR)) {
+    fs.mkdirSync(MCP_DIR, { recursive: true });
+  }
+
+  const serviceInfo = {
+    name: SERVICE_NAME,
+    port: port
+  };
+
+  fs.writeFileSync(SERVICE_FILE, JSON.stringify(serviceInfo, null, 2));
+}
+
+function unregisterService() {
+  if (fs.existsSync(SERVICE_FILE)) {
+    fs.unlinkSync(SERVICE_FILE);
+  }
+}
 
 // --- MCP Server Implementation ---
 
@@ -31,7 +59,14 @@ const server = net.createServer((socket) => {
   });
 });
 
-server.listen(8080, '127.0.0.1');
+server.listen(0, '127.0.0.1', () => {
+  const port = server.address().port;
+  registerService(port);
+});
+
+process.on('exit', unregisterService);
+
+// --- MCP Client Implementation ---
 
 function handleMcpMessage(message) {
   if (message.jsonrpc !== '2.0') {
@@ -42,10 +77,12 @@ function handleMcpMessage(message) {
   if (message.method) {
     // This is a request from gemini-cli
     switch (message.method) {
-      case 'mcp.echo':
+      case 'mcp.getBrowserContent':
         if (extensionPort) {
+          pendingRequests.set(message.id, message.id);
           const msg = {
-            text: message.params
+            action: 'getBrowserContent',
+            id: message.id
           };
           const buffer = Buffer.from(JSON.stringify(msg));
           const header = Buffer.alloc(4);
@@ -58,16 +95,11 @@ function handleMcpMessage(message) {
         sendMcpError(`Method not found: ${message.method}`, message.id);
     }
   } else if (message.result) {
-    // This is a response from gemini-cli, forward to extension
-    if (extensionPort) {
-      const msg = {
-        text: message.result
-      };
-      const buffer = Buffer.from(JSON.stringify(msg));
-      const header = Buffer.alloc(4);
-      header.writeUInt32LE(buffer.length, 0);
-      extensionPort.stdout.write(header);
-      extensionPort.stdout.write(buffer);
+    // This is a response from the extension
+    const originalId = pendingRequests.get(message.id);
+    if (originalId) {
+      sendMcpResponse(originalId, message.result);
+      pendingRequests.delete(originalId);
     }
   }
 }
@@ -106,15 +138,24 @@ process.stdin.on('data', (chunk) => {
 
   const length = chunk.readUInt32LE(0);
   const message = chunk.slice(4).toString();
-  const parsedMessage = JSON.parse(message);
+  const parsedMessage = JSON.JSON.parse(message);
 
-  // Forward message from extension to gemini-cli as a notification
-  if (mcpSocket) {
-    const notification = {
-      jsonrpc: '2.0',
-      method: 'extension.message',
-      params: parsedMessage
-    };
-    mcpSocket.write(JSON.stringify(notification) + '\n');
+  // Message from extension
+  if (parsedMessage.action === 'response') {
+    const originalId = pendingRequests.get(parsedMessage.id);
+    if (originalId) {
+      sendMcpResponse(originalId, parsedMessage.data);
+      pendingRequests.delete(originalId);
+    }
+  } else {
+    // Forward message from extension to gemini-cli as a notification
+    if (mcpSocket) {
+      const notification = {
+        jsonrpc: '2.0',
+        method: 'extension.message',
+        params: parsedMessage
+      };
+      mcpSocket.write(JSON.stringify(notification) + '\n');
+    }
   }
 });
