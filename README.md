@@ -11,13 +11,12 @@ This project is a Chrome extension that uses native messaging to communicate wit
 
 ## How it Works
 
-1.  **Extension UI (`popup.html`, `popup.js`):** The popup provides a simple UI to send messages. It communicates with the `background.js` script.
-2.  **Background Script (`background.js`):** This script runs in the background and maintains a persistent connection to the `native-host.js`.
-3.  **Native Host (`native-host.js`):** This is the core of the project. It does two things:
-    *   It communicates with the Chrome extension using the standard native messaging protocol.
-    *   It starts a TCP server on a random available port and listens for incoming connections from other applications (like `gemini-cli`).
-4.  **Service Discovery:** When the native host starts, it creates a file in `~/.mcp/services/` that contains the port number it is listening on. This allows other applications to find and connect to it.
-5.  **MCP Server:** The native host implements a simple JSON-RPC-based MCP server to handle requests from connected clients.
+There are two main communication channels in this project:
+
+1.  **Extension to Native Host:** The Chrome extension initiates a persistent connection to the `native-host.js` script. This is done when you click the "Start MCP Connection" button in the popup.
+2.  **MCP Client to Native Host:** The `native-host.js`, once started by the extension, creates a TCP server and listens for incoming connections from other applications (like a `gemini-cli`). These applications are responsible for initiating their own connections to the native host.
+
+Here is a breakdown of the components:
 
 ## How to Test
 
