@@ -18,6 +18,22 @@ There are two main communication channels in this project:
 
 Here is a breakdown of the components:
 
+## How to Discover Available MCP Services
+
+To see which MCP services are currently running, you can list the files in the `~/.mcp/services/` directory:
+
+```bash
+ls ~/.mcp/services/
+```
+
+Each file in this directory represents an available service. To get the connection details for a specific service (like the port number), you can read the content of its corresponding file:
+
+```bash
+cat ~/.mcp/services/com.my.native_host.json
+```
+
+This will show you the JSON data for the service, including the port it is running on.
+
 ## How to Test
 
 1.  **Load the Extension:**
