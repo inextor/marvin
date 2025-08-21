@@ -122,7 +122,7 @@ const tools = [
         return { content: [{ type: "text", text: JSON.stringify(browserResponse) }] };
     },
   },
-  {
+  /*  {
     name: "getDrinkNames",
     description: "Get the names of the drinks in the shop",
     inputSchema: { type: "object", properties: {} },
@@ -136,7 +136,7 @@ const tools = [
         ],
       };
     },
-  },
+  }, */
 ];
 
 (async function main() {
