@@ -78,6 +78,75 @@ async function handleGetContent(requestId, tabId, selector) {
   }
 }
 
+/**
+ * Handles the getTabContent request from the native host.
+ * Finds a tab by title (case-insensitive substring match), and returns the innerHTML of an element matching the provided CSS selector.
+ * @param {string} requestId - The ID of the original request.
+ * @param {string} title - The title (or substring) of the target tab.
+ * @param {string} query - The CSS selector to query within the tab.
+ */
+async function handleGetTabContent(requestId, title, query) {
+  try {
+    const allTabs = await chrome.tabs.query({});
+    const lowerCaseTitle = title.toLowerCase();
+
+    const matchingTabs = allTabs.filter(tab =>
+      tab.title && tab.title.toLowerCase().includes(lowerCaseTitle)
+    );
+
+    if (matchingTabs.length === 0) {
+      port.postMessage({ action: 'response', id: requestId, error: `No tab found with title containing: "${title}"` });
+      return;
+    }
+    const targetTab = matchingTabs[0]; // Assuming the first matching tab is sufficient
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: targetTab.id },
+      func: (sel) => {
+        const element = document.querySelector(sel);
+        if (element) {
+          // Create a temporary div to hold the content for processing
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = element.innerHTML;
+
+          // Remove all style attributes
+          tempDiv.querySelectorAll('*').forEach(el => {
+            el.removeAttribute('style');
+          });
+
+          // Remove all empty attributes
+          tempDiv.querySelectorAll('*').forEach(el => {
+            Array.from(el.attributes).forEach(attr => {
+              if (attr.value === '') {
+                el.removeAttribute(attr.name);
+              }
+            });
+          });
+
+          return { content: tempDiv.innerHTML };
+        } else {
+          return { error: `CSS selector "${sel}" did not match any elements.` };
+        }
+      },
+      args: [query],
+    });
+
+    if (chrome.runtime.lastError) {
+      port.postMessage({ action: 'response', id: requestId, error: `Failed to inject script into tab ${targetTab.id}: ${chrome.runtime.lastError.message}` });
+      return;
+    }
+
+    const scriptResult = results[0].result;
+    if (scriptResult.error) {
+      port.postMessage({ action: 'response', id: requestId, error: scriptResult.error });
+    } else {
+      port.postMessage({ action: 'response', id: requestId, data: scriptResult });
+    }
+  } catch (e) {
+    port.postMessage({ action: 'response', id: requestId, error: `Failed to get tab content: ${e.message}` });
+  }
+}
+
 
 // --- Native Host Communication ---
 
@@ -96,6 +165,13 @@ function onNativeMessage(msg) {
                 handleGetContent(msg.id, msg.params.tabId, msg.params.selector);
             } else {
                 port.postMessage({ action: 'response', id: msg.id, error: 'Missing tabId for getContent' });
+            }
+            break;
+        case 'getTabContent':
+            if (msg.params && msg.params.title && msg.params.query) {
+                handleGetTabContent(msg.id, msg.params.title, msg.params.query);
+            } else {
+                port.postMessage({ action: 'response', id: msg.id, error: 'Missing title or query for getTabContent' });
             }
             break;
         default:

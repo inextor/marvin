@@ -122,6 +122,23 @@ const tools = [
         return { content: [{ type: "text", text: JSON.stringify(browserResponse) }] };
     },
   },
+  {
+    name: "getTabContent",
+    description: "Get the content of a browser tab based on its title and a media query",
+    inputSchema: {
+        type: "object",
+        properties: {
+            title: { type: "string", description: "The title of the browser tab." },
+            query: { type: "string", description: "A CSS selector to filter content (e.g., '#my-element' or '.some-class')." },
+        },
+        required: ["title", "media_query"],
+    },
+    execute: async (args: any) => {
+        const { title, query } = args;
+        const browserResponse = await sendRequestToHost({ action: 'getTabContent', params: { title, query } });
+        return { content: [{ type: "text", text: JSON.stringify(browserResponse) }] };
+    },
+  },
   /*  {
     name: "getDrinkNames",
     description: "Get the names of the drinks in the shop",
