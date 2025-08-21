@@ -67,6 +67,10 @@ function handleCommunication(socket) {
             if (inputBuffer.length >= 4 + messageLength) {
                 const messageChunk = inputBuffer.slice(4, 4 + messageLength);
                 inputBuffer = inputBuffer.slice(4 + messageLength);
+
+				//parse message must be { action: '', 'data': '' }
+				//{ response: tabId, data: title }
+				
                 const parsedMessage = JSON.parse(messageChunk.toString());
                 debugLog(`Browser -> Server: ${JSON.stringify(parsedMessage)}`);
                 socket.write(JSON.stringify(parsedMessage) + '\n');
