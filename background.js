@@ -35,10 +35,14 @@ async function getContentFromTab(tabId, selector) {
         func: (sel) => {
             const element = document.querySelector(sel);
             if (element) {
-                return { content: element.outerHTML }; // Return outerHTML for more context
+                const clone = element.cloneNode(true);
+                clone.removeAttribute('style');
+                const descendants = clone.querySelectorAll('*');
+                descendants.forEach(desc => desc.removeAttribute('style'));
+                return { content: clone.outerHTML };
             }
             // More specific error when element is not found
-            return { error: `Selector \"${sel}\" did not match any elements.` };
+            return { error: `Selector "${sel}" did not match any elements.` };
         },
         args: [selector],
     });
