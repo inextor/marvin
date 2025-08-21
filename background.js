@@ -11,6 +11,11 @@ let port = null;
 async function handleGetTitles(requestId) {
   try {
     const tabs = await chrome.tabs.query({});
+    if (tabs.length === 0) {
+        // Provide a specific message when no tabs are available
+        port.postMessage({ action: 'response', id: requestId, data: { message: "No tabs found." } });
+        return;
+    }
     const tabInfo = tabs.filter(tab => tab.id).map(tab => ({ id: tab.id, title: tab.title }));
     port.postMessage({ action: 'response', id: requestId, data: tabInfo });
   } catch (e) {
@@ -19,18 +24,51 @@ async function handleGetTitles(requestId) {
 }
 
 /**
+ * Injects and executes a function in a tab to get content from the DOM.
+ * @param {number} tabId - The ID of the target tab.
+ * @param {string} selector - The CSS selector to query.
+ * @returns {Promise<object>} - A promise that resolves with the content or an error.
+ */
+async function getContentFromTab(tabId, selector) {
+    const results = await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: (sel) => {
+            const element = document.querySelector(sel);
+            if (element) {
+                return { content: element.outerHTML }; // Return outerHTML for more context
+            }
+            // More specific error when element is not found
+            return { error: `Selector \"${sel}\" did not match any elements.` };
+        },
+        args: [selector],
+    });
+
+    // Error handling for injection results
+    if (chrome.runtime.lastError) {
+        // Handle cases where script injection itself fails
+        return { error: `Failed to inject script into tab ${tabId}: ${chrome.runtime.lastError.message}` };
+    }
+
+    // The result from executeScript is an array of InjectionResult objects.
+    // We expect one result from our single injection.
+    return results[0].result;
+}
+
+/**
  * Handles the getContent request from the native host.
- * Forwards the request to the appropriate content script.
  * @param {string} requestId - The ID of the original request.
  * @param {number} tabId - The ID of the target tab.
  * @param {string} selector - The CSS selector to query.
  */
 async function handleGetContent(requestId, tabId, selector) {
   try {
-    // Ensure the tab exists before sending a message
-    await chrome.tabs.get(tabId);
-    const response = await chrome.tabs.sendMessage(tabId, { action: "getContent", selector: selector });
-    port.postMessage({ action: 'response', id: requestId, data: response });
+    const result = await getContentFromTab(tabId, selector);
+    // Check if the result from the tab contains an error
+    if (result.error) {
+        port.postMessage({ action: 'response', id: requestId, error: result.error });
+    } else {
+        port.postMessage({ action: 'response', id: requestId, data: result });
+    }
   } catch (e) {
     port.postMessage({ action: 'response', id: requestId, error: `Failed to get content from tab ${tabId}: ${e.message}` });
   }
@@ -63,6 +101,37 @@ function onNativeMessage(msg) {
     }
 }
 
+let reconnectTimer = null;
+
+/**
+ * Schedules a reconnection attempt after a delay.
+ */
+function scheduleReconnect() {
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+    }
+    // Try to reconnect every 5 seconds
+    reconnectTimer = setTimeout(reconnect, 5000);
+}
+
+/**
+ * Tries to reconnect to the native host.
+ */
+function reconnect() {
+    if (port) {
+        console.log("Already connected, cancelling reconnect.");
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        return;
+    }
+    console.log("Attempting to reconnect to native host...");
+    port = chrome.runtime.connectNative("com.my.native_host");
+    port.onMessage.addListener(onNativeMessage);
+    port.onDisconnect.addListener(onDisconnected);
+}
+
 /**
  * Handles disconnection from the native host.
  */
@@ -70,6 +139,8 @@ function onDisconnected() {
     console.log(`Native host disconnected: ${chrome.runtime.lastError ? chrome.runtime.lastError.message : "No error message"}`);
     port = null;
     chrome.runtime.sendMessage({ action: 'statusUpdate', isConnected: false }).catch(() => {});
+    // Schedule a reconnection attempt
+    scheduleReconnect();
 }
 
 // --- Popup Communication ---
@@ -79,6 +150,11 @@ function onDisconnected() {
  */
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'start') {
+        // If a reconnect timer is running, cancel it
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
         if (port) {
             console.log('Already connected to native host.');
             sendResponse({ isConnected: true });
@@ -101,7 +177,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.action === 'popupGetContent') {
         (async () => {
             try {
-                const response = await chrome.tabs.sendMessage(msg.tabId, { action: "getContent", selector: "h1" });
+                const response = await getContentFromTab(msg.tabId, "h1");
                 sendResponse(response);
             } catch (e) {
                 sendResponse({ error: e.message });
