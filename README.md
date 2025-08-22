@@ -7,6 +7,7 @@ The system is composed of three main parts:
 
 1.  **Browser Extension**: The frontend running in the browser (`popup.js`, `background.js`).
 2.  **Browser Host (`browser-host.js`)**: A script launched by the browser via the Native Messaging API. It communicates with the browser over `stdio` and connects to the MCP Server via a TCP socket.
+3.  **MCP Server Project**: a Typescript/Node.js project that runs a MCP server this program communicates with browser-host.js via a TCP socket.
 
 
 ## Setup
